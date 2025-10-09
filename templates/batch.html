@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📊 Batch Prediction - Student Performance</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen flex flex-col items-center justify-center p-6">
+
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-8">
+
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-extrabold text-indigo-700 mb-2">🎓 Batch Student Performance Predictor</h1>
+      <p class="text-gray-500 text-base">Upload an Excel or CSV file to predict who is likely to pass or fail</p>
+    </div>
+
+    <!-- Upload Form -->
+    <form action="/batch" method="POST" enctype="multipart/form-data" class="space-y-5">
+      <div>
+        <label for="file" class="block font-semibold text-gray-700 mb-2">📁 Upload File</label>
+        <input type="file" name="file" id="file" accept=".csv,.xlsx,.xls" required
+          class="block w-full text-sm text-gray-700 bg-gray-50 border border-gray-300 rounded-lg cursor-pointer focus:ring-2 focus:ring-indigo-400 focus:outline-none p-2">
+        <p class="text-sm text-gray-500 mt-1">Your file should include columns like <code>student_id</code>, <code>gender</code>, <code>age</code>, <code>parent_education</code>, etc.</p>
+      </div>
+
+      <button type="submit"
+        class="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold py-3 rounded-xl shadow-md hover:opacity-90 transition">
+        📤 Upload & Predict
+      </button>
+    </form>
+
+    <div class="text-center mt-6">
+      <a href="/" class="text-indigo-600 hover:text-indigo-800 font-medium transition">← Back to Single Prediction</a>
+    </div>
+
+    <!-- Results -->
+    {% if table %}
+    <div class="mt-10">
+        <h3 class="text-2xl text-center font-bold text-green-600 mb-4">📈 Prediction Results</h3>
+        <div class="overflow-x-auto">
+        <div class="bg-white rounded-xl shadow-md border border-gray-100 p-3">
+            {{ table | safe }}
+        </div>
+        </div>
+
+        <!-- Download Button -->
+        {% if csv_string %}
+        <div class="text-center mt-4">
+            <a href="{{ url_for('download_csv') }}?csv={{ csv_string | urlencode }}"
+            class="inline-block bg-green-500 text-white font-semibold py-2 px-6 rounded-xl shadow-md hover:opacity-90 transition">
+            ⬇ Download CSV
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+
+
+    <!-- Footer -->
+    <footer class="mt-10 text-center text-gray-400 text-sm">
+      <p>© 2025 Student Performance Predictor</p>
+    </footer>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎓 Student Performance Predictor</title>
+  <script src="/static/script.js" defer></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 transform transition hover:scale-[1.01]">
+    
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-extrabold text-indigo-700 mb-2">🎓 Student Performance Predictor</h1>
+      <p class="text-gray-500">Predict whether a student will pass or fail based on academic and personal factors</p>
+    </div>
+
+    <!-- Form -->
+    <form id="predictForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <!-- Gender -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Gender</label>
+        <select id="gender" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+          <option>Male</option>
+          <option>Female</option>
+          <option>Other</option>
+        </select>
+      </div>
+
+      <!-- Age -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Age</label>
+        <input id="age" type="number" value="18" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+      </div>
+
+      <!-- Parent Education -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Parent Education</label>
+        <select id="parent_education" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+          <option>None</option>
+          <option>Primary</option>
+          <option>Secondary</option>
+          <option>Graduate</option>
+          <option>Postgraduate</option>
+        </select>
+      </div>
+
+      <!-- Family Income -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Family Income</label>
+        <input id="family_income" type="number" value="25000" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+      </div>
+
+      <!-- Attendance -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Attendance (%)</label>
+        <input id="attendance_pct" type="number" value="85" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+      </div>
+
+      <!-- Internal Marks -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Internal Marks (%)</label>
+        <input id="internal_marks" type="number" value="70" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+      </div>
+
+      <!-- Assignments -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Assignments Submitted (%)</label>
+        <input id="assignments_submitted_pct" type="number" value="80" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+      </div>
+
+      <!-- Previous Grade -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Previous Grade</label>
+        <select id="previous_grade" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+          <option>A</option><option>B</option><option>C</option><option>D</option><option>F</option>
+        </select>
+      </div>
+
+      <!-- Extracurricular -->
+      <div class="sm:col-span-2">
+        <label class="block font-medium text-gray-700 mb-1">Extracurricular Involvement</label>
+        <select id="extracurricular" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+          <option>None</option><option>Low</option><option>Medium</option><option>High</option>
+        </select>
+      </div>
+
+      <!-- Button -->
+      <div class="sm:col-span-2 mt-4">
+        <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold py-2.5 rounded-lg hover:opacity-90 transition-all shadow-lg">🔍 Predict Performance</button>
+      </div>
+    </form>
+
+    <!-- Result -->
+    <div id="result" class="mt-6 text-center"></div>
+
+  </div>
+</body>
+</html>
