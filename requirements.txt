@@ -1,0 +1,8 @@
+pandas
+numpy
+scikit-learn
+joblib
+flask
+xgboost       # optional but recommended
+tensorflow    # optional (for neural net)
+shap          # optional (for explainability)

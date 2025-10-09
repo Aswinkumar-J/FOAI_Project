@@ -1,0 +1,12 @@
+student_id,gender,age,parent_education,family_income,attendance_pct,internal_marks,assignments_submitted_pct,previous_grade,extracurricular
+S00001,Male,18,Graduate,35000,92,85,90,A,High
+S00002,Female,19,Secondary,20000,70,60,65,C,Medium
+S00003,Male,20,Primary,15000,55,45,50,D,Low
+S00004,Female,18,Postgraduate,50000,95,92,94,A,High
+S00005,Male,21,Secondary,22000,78,72,75,B,Medium
+S00006,Female,19,Graduate,28000,85,80,82,B,High
+S00007,Male,22,None,12000,40,35,30,F,None
+S00008,Female,20,Graduate,30000,88,85,87,B,Medium
+S00009,Male,21,Primary,18000,60,55,58,C,Low
+S00010,Female,19,Postgraduate,40000,98,95,96,A,High
+S00011,Female,0,Graduate,50000,95,100,70,B,None
