@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎓 Student Performance Predictor</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-8 transform transition hover:scale-[1.01]">
+
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-extrabold text-indigo-700 mb-2">🎓 Student Predictor</h1>
+      <p class="text-gray-500">Predict whether a student will pass or fail based on academic and personal factors</p>
+    </div>
+
+    <!-- Form -->
+    <form id="predictFormSimple" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <!-- Attendance -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Attendance (%)</label>
+        <input id="attendance_pct" name="attendance_pct" type="number" value="85" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+      </div>
+
+      <!-- Internal Marks -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Internal Marks (%)</label>
+        <input id="internal_marks" name="internal_marks" type="number" value="70" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+      </div>
+
+      <!-- Assignments -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Assignments Submitted (%)</label>
+        <input id="assignments_submitted_pct" name="assignments_submitted_pct" type="number" value="80" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+      </div>
+
+      <!-- Previous Grade -->
+      <div>
+        <label class="block font-medium text-gray-700 mb-1">Previous Grade</label>
+        <select id="previous_grade" name="previous_grade" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+          <option>A</option><option>B</option><option>C</option><option>D</option><option>F</option>
+        </select>
+      </div>
+
+      <!-- Extracurricular -->
+      <div class="sm:col-span-2">
+        <label class="block font-medium text-gray-700 mb-1">Extracurricular Involvement</label>
+        <select id="extracurricular" name="extracurricular" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 focus:outline-none">
+          <!-- <option>None</option><option>Low</option><option>Medium</option><option>High</option> -->
+           <option>None</option><option>Low</option><option>High</option> 
+        </select>
+      </div>
+
+      <!-- Button -->
+      <div class="sm:col-span-2 mt-4">
+        <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold py-2.5 rounded-lg hover:opacity-90 transition-all shadow-lg">🔍 Predict Performance</button>
+      </div>
+    </form>
+
+    <!-- Result -->
+    <div id="result" class="mt-6 text-center" style="display:none">
+        <p>Prediction: <span id="pred_label"></span></p>
+        <p>Probability: <span id="pred_prob"></span>%</p>
+        <p>Remarks: <span id="pred_remarks"></span></p>
+    </div>
+
+  </div>
+<script>
+document.getElementById('predictFormSimple').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    const payload = {};
+    formData.forEach((value, key) => payload[key] = value);
+
+    // ✅ Send request to /predict_simple
+    const response = await fetch('/predict_simple', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    const data = await response.json();
+
+    document.getElementById('result').style.display = 'block';
+    if (data.error) {
+        document.getElementById('pred_label').textContent = "Error";
+        document.getElementById('pred_prob').textContent = "-";
+        document.getElementById('pred_remarks').textContent = data.error;
+    } else {
+        document.getElementById('pred_label').textContent = data.prediction === 1 ? "Pass" : "Fail";
+        document.getElementById('pred_prob').textContent = data.probability.toFixed(2);
+        document.getElementById('pred_remarks').textContent = Array.isArray(data.remarks) ? data.remarks.join("; ") : data.remarks;
+    }
+});
+</script>
+
+
+</body>
+</html>
