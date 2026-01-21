@@ -29,7 +29,7 @@ document.getElementById('predictForm').addEventListener('submit', async function
     } else {
       resultDiv.innerHTML = `
         <p class="text-lg font-semibold">Prediction: ${data.prediction ? 'Pass' : 'Fail'}</p>
-        <p>Probability: ${(data.probability * 100).toFixed(2)}%</p>
+        <p>Probability: ${(data.probability).toFixed(2)}%</p>
         <p class="text-md text-blue-600 font-medium">Remarks: ${data.remarks}</p>
       `;
     }
