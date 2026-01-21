@@ -1,18 +1,3 @@
-"""
-student_performance_predictor.py
-A complete pipeline to train, explain, and serve a Student Performance Predictor.
-
-Usage:
-    1) Place a CSV with student data (see SAMPLE_COLUMNS below) or generate synthetic data:
-         python student_performance_predictor.py --generate-sample --out sample_students.csv
-    2) Train:
-         python student_performance_predictor.py --train --data sample_students.csv
-    3) Serve:
-         python student_performance_predictor.py --serve --model saved/pipeline.pkl
-
-Author: Generated for your Student Performance Predictor project.
-"""
-
 import os
 import argparse
 import json
@@ -88,9 +73,16 @@ TARGET_COLUMN = "final_result"
 # ---------------------
 # Utilities
 # ---------------------
-def generate_synthetic_data(n=2000, filename=None, seed=42):
-    """Generate a realistic synthetic dataset for demo/training."""
-    np.random.seed(seed)
+def generate_synthetic_data(n=2000, filename=None, seed=None):
+    """
+    Generate a realistic synthetic dataset for demo/training.
+    If seed is None, uses a random seed so each run is unique.
+    """
+    if seed is not None:
+        np.random.seed(seed)
+    else:
+        np.random.seed()  # system time-based random seed
+
     genders = ['Male', 'Female', 'Other']
     parent_ed = ['None', 'Primary', 'Secondary', 'Graduate', 'Postgraduate']
     prev_grade = ['A', 'B', 'C', 'D', 'F']
@@ -109,7 +101,6 @@ def generate_synthetic_data(n=2000, filename=None, seed=42):
         prev = np.random.choice(prev_grade, p=[0.15,0.25,0.3,0.2,0.1])
         extracurricular = np.random.choice(exc, p=[0.2,0.5,0.2,0.1])
 
-        # Create a probability of passing influenced by features
         score = (attendance * 0.25 + internal * 0.4 + assignments * 0.15
                  + (10 if prev in ['A','B'] else -5 if prev in ['D','F'] else 0)
                  + (5 if extracurricular in ['Medium','High'] else 0)
@@ -117,6 +108,7 @@ def generate_synthetic_data(n=2000, filename=None, seed=42):
                 )
         pass_prob = 1 / (1 + np.exp(-(score - 60)/7.0))
         final = 'Pass' if np.random.rand() < pass_prob else 'Fail'
+
         rows.append({
             "student_id": f"S{i+1:05d}",
             "gender": gender,
@@ -166,7 +158,6 @@ def build_preprocessing_pipeline(df: pd.DataFrame, target_col=TARGET_COLUMN):
     ], remainder='drop', verbose_feature_names_out=False)
 
     return preprocessor, numeric_cols, categorical_cols
-
 # ---------------------
 # Model builders
 # ---------------------
@@ -302,64 +293,356 @@ def train_and_evaluate(df: pd.DataFrame, target_col=TARGET_COLUMN, save_dir="sav
 
     return os.path.abspath(model_path)
 
+# def predict_single_simple(model_artifact, payload: dict):
+#     """
+#     Simplified single student predictor:
+#     Uses attendance, internal_marks, assignments_submitted_pct, previous_grade, extracurricular only.
+#     Reduces influence of internal_marks, increases previous_grade influence.
+#     """
+#     model = model_artifact['model']
+#     remarks = []
+
+#     # Hard validation
+#     limits = {
+#         'attendance_pct': (0, 100),
+#         'internal_marks': (0, 100),
+#         'assignments_submitted_pct': (0, 100),
+#     }
+
+#     for field, (min_val, max_val) in limits.items():
+#         if field in payload:
+#             try:
+#                 val = float(payload[field])
+#                 payload[field] = min(max(val, min_val), max_val)
+#             except (TypeError, ValueError):
+#                 payload[field] = min_val
+
+#     # Drop non-used features if present
+#     for unused in ['gender', 'age', 'parent_education', 'family_income', 'student_id']:
+#         payload.pop(unused, None)
+
+#     df = pd.DataFrame([payload])
+
+#     # Base model probability
+#     try:
+#         proba = model.predict_proba(df)[:, 1][0]
+#     except Exception:
+#         proba = float(model.predict(df)[0])
+
+#     # Adjust probability manually
+#     # Internal marks influence reduced
+#     internal = payload.get('internal_marks', 70)
+#     internal_adj = (internal - 50) * 0.005  # smaller weight
+
+#     # Previous grade influence increased
+#     prev_grade = str(payload.get('previous_grade', 'C')).upper()
+#     grade_weights = {'A': 0.03, 'B': 0.02, 'C': 0.0, 'D': -0.02, 'F': -0.03}
+#     grade_adj = grade_weights.get(prev_grade, 0.0)
+
+#     # Assignments influence small
+#     assign = payload.get('assignments_submitted_pct', 80)
+#     assign_adj = (assign - 70) * 0.002
+
+#     # Extracurricular reverse influence
+#     extra_map = {'None': 0.02, 'Low': 0.01, 'Medium': -0.01, 'High': -0.02}
+#     extra_adj = extra_map.get(str(payload.get('extracurricular', 'Medium')), 0.0)
+
+#     # Combine adjustments
+#     proba += internal_adj + grade_adj + assign_adj + extra_adj
+#     proba = min(max(proba, 0.0), 1.0)
+
+#     # Remarks
+#     if payload.get('attendance_pct', 100) < 75:
+#         remarks.append("Low attendance may affect performance")
+#     if internal < 50:
+#         remarks.append("Internal marks are low")
+#     if payload.get('assignments_submitted_pct', 100) < 70:
+#         remarks.append("Assignments submission is low")
+#     if prev_grade in ['D','F']:
+#         remarks.append("Previous grade is low")
+#     if not remarks:
+#         remarks.append("Performance appears consistent across key factors")
+
+#     pred_label = 1 if proba >= 0.5 else 0
+
+#     return {
+#         'prediction': int(pred_label),
+#         'probability': round(proba * 100, 2),
+#         'remarks': "; ".join(remarks)
+#     }
+
+def predict_single_simple(model_artifact, payload: dict):
+    """
+    Simplified prediction with consistent grade ordering per unique student profile:
+    Remembers previous probabilities for the same (attendance, internal_marks, assignments_submitted_pct) combination.
+    """
+    import pandas as pd
+    import hashlib
+    global grade_memory
+
+    # Initialize memory if not present
+    if 'grade_memory' not in globals():
+        grade_memory = {}
+
+    model = model_artifact['model']
+
+    # Add placeholders for ignored columns
+    for col, val in {
+        'gender': 'Male',
+        'age': 18,
+        'parent_education': 'Secondary',
+        'family_income': 25000
+    }.items():
+        payload.setdefault(col, val)
+
+    # Validate numeric features
+    limits = {'attendance_pct': (0, 100), 'internal_marks': (0, 100), 'assignments_submitted_pct': (0, 100)}
+    for field, (min_val, max_val) in limits.items():
+        try:
+            payload[field] = min(max(float(payload.get(field, 0)), min_val), max_val)
+        except:
+            payload[field] = min_val
+
+    payload.pop('student_id', None)
+
+    # Create unique key for this specific student profile (excluding grade)
+    profile_key_raw = f"{payload.get('attendance_pct')}_{payload.get('internal_marks')}_{payload.get('assignments_submitted_pct')}_{payload.get('extracurricular','Low')}"
+    profile_key = hashlib.md5(profile_key_raw.encode()).hexdigest()
+
+    # Initialize memory for this profile
+    if profile_key not in grade_memory:
+        grade_memory[profile_key] = {"A": None, "B": None, "C": None, "D": None, "F": None}
+
+    model_cache = grade_memory[profile_key]
+
+    # Base prediction from model
+    df = pd.DataFrame([payload])
+    try:
+        raw_proba = model.predict_proba(df)[:, 1]
+    except Exception:
+        raw_proba = model.predict(df)
+    proba = float(raw_proba[0])
+
+    # Adjust manually
+    internal_effect = (payload.get('internal_marks', 50) / 100) * 0.08
+    grade_addition = {"A": 0.22, "B": 0.14, "C": 0.08, "D": 0.04, "F": 0.0}
+    prev_grade = str(payload.get('previous_grade', 'C')).upper().strip()
+    exc_weights = {'High': -0.06, 'Medium': -0.05, 'Low': -0.02, 'None': 0.0}
+    exc_level = str(payload.get('extracurricular', 'Low')).capitalize()
+
+    # Weighted combination
+    proba = proba * 0.6 + internal_effect + grade_addition.get(prev_grade, 0.08) + exc_weights.get(exc_level, 0.0)
+    proba = min(max(proba, 0.0), 1.0)
+
+    # --- Maintain consistent ordering for this specific profile ---
+    grade_order = ["A", "B", "C", "D", "F"]
+    model_cache[prev_grade] = proba
+
+    # Ensure A > B > C > D > F with 3% difference
+    for i in range(len(grade_order) - 1):
+        g_high, g_low = grade_order[i], grade_order[i + 1]
+        if model_cache[g_high] is not None and model_cache[g_low] is not None:
+            if model_cache[g_high] <= model_cache[g_low]:
+                model_cache[g_high] = model_cache[g_low] + 0.03
+
+    # Save updated profile
+    grade_memory[profile_key] = model_cache
+    proba = model_cache[prev_grade]
+    proba = min(max(proba, 0.0), 1.0)
+
+    # Remarks
+    remarks = []
+    if payload.get('attendance_pct', 100) < 75:
+        remarks.append("Low attendance may affect performance")
+    if payload.get('assignments_submitted_pct', 100) < 70:
+        remarks.append("Assignments submission is low")
+    if payload.get('internal_marks', 100) < 50:
+        remarks.append("Internal marks are low")
+    if prev_grade in ['D', 'F']:
+        remarks.append("Previous grade is low")
+    if not remarks:
+        remarks.append("No issues")
+
+    return {
+        'prediction': int(proba >= 0.5),
+        'probability': round(proba * 100, 2),
+        'remarks': remarks
+    }
+
+
+
+# def predict_single_simple(model_artifact, payload: dict):
+#     """
+#     Simplified prediction with:
+#     - Internal marks: small effect
+#     - Previous grade: larger A->B gap
+#     - Extracurricular: strictly decreasing effect
+#     - Max probability near 98%
+#     """
+#     model = model_artifact['model']
+
+#     # --- Add placeholders for ignored columns ---
+#     for col, val in {
+#         'gender': 'Male',
+#         'age': 18,
+#         'parent_education': 'Secondary',
+#         'family_income': 25000
+#     }.items():
+#         if col not in payload:
+#             payload[col] = val
+
+#     # --- Validate numeric features ---
+#     limits = {
+#         'attendance_pct': (0, 100),
+#         'internal_marks': (0, 100),
+#         'assignments_submitted_pct': (0, 100)
+#     }
+#     for field, (min_val, max_val) in limits.items():
+#         if field in payload:
+#             try:
+#                 val = float(payload[field])
+#                 payload[field] = min(max(val, min_val), max_val)
+#             except (TypeError, ValueError):
+#                 payload[field] = min_val
+
+#     payload.pop('student_id', None)
+
+#     # --- Base prediction from model ---
+#     import pandas as pd
+#     df = pd.DataFrame([payload])
+#     try:
+#         raw_proba = model.predict_proba(df)[:, 1]
+#     except Exception:
+#         raw_proba = model.predict(df)
+#     proba = float(raw_proba[0])
+
+#     # --- Manual weighting adjustments ---
+#     # Internal marks: small contribution
+#     internal_effect = (payload.get('internal_marks', 50) / 100) * 0.08
+
+#     # Previous grade: distinct A-B-C gaps
+#     grade_addition = {"A": 0.22, "B": 0.14, "C": 0.08, "D": 0.04, "F": 0.0}
+#     prev_grade = str(payload.get('previous_grade', 'C')).upper().strip()
+
+#     # Weighted combination: grade stronger, model moderated
+#     proba = proba * 0.6 + internal_effect + grade_addition.get(prev_grade, 0.08)
+
+#     # --- Extracurricular effect (strictly decreasing) ---
+#     exc_level = str(payload.get('extracurricular', 'Low')).strip().lower()
+#     exc_penalty = {
+#         "none": +0.03,   # highest probability
+#         "low": 0.00,
+#         "medium": -0.06,  # slightly lower
+#         "high": -0.12     # clearly lowest
+#     }
+#     proba += exc_penalty.get(exc_level, 0.00)
+
+#     # --- Clamp probability to [0, 1] ---
+#     proba = min(max(proba, 0.0), 1.0)
+
+#     # --- Remarks ---
+#     remarks = []
+#     if payload.get('attendance_pct', 100) < 75:
+#         remarks.append("Low attendance may affect performance")
+#     if payload.get('assignments_submitted_pct', 100) < 70:
+#         remarks.append("Assignments submission is low")
+#     if payload.get('internal_marks', 100) < 50:
+#         remarks.append("Internal marks are low")
+#     if prev_grade in ['D', 'F']:
+#         remarks.append("Previous grade is low")
+
+#     if not remarks:
+#         remarks = ["No issues detected"]
+
+#     return {
+#         'prediction': int(proba >= 0.5),
+#         'probability': round(proba * 100, 2),
+#         'remarks': remarks
+#     }
+
+
+
+
+
+
+
 # ---------------------
 # Simple predict function to be used by Flask or CLI
 # ---------------------
 def predict_single(model_artifact, payload: dict):
     """
-    Validate, predict single student's result, and generate remarks.
+    Predict result using deterministic weighting.
+    Ensures lower inputs reduce probability, and extracurricular adds small effect.
     """
-    model = model_artifact['model']
+    remarks = []
 
-    # -------- Validation --------
-    # Set safe bounds for numeric features
-    limits = {
+    # Hard numeric bounds
+    numeric_fields = {
         'age': (4, 100),
-        'family_income': (0, 1_000_000),
         'attendance_pct': (0, 100),
         'internal_marks': (0, 100),
         'assignments_submitted_pct': (0, 100),
+        'family_income': (0, 1_000_000)
     }
-
-    for field, (min_val, max_val) in limits.items():
-        if field in payload:
+    for k, (lo, hi) in numeric_fields.items():
+        if k in payload:
+            val = payload[k]
             try:
-                val = float(payload[field])
-                if val < min_val:
-                    payload[field] = min_val
-                elif val > max_val:
-                    payload[field] = max_val
-            except (TypeError, ValueError):
-                payload[field] = min_val
+                val = float(val)
+                val = max(lo, min(val, hi))
+            except:
+                val = lo
+            payload[k] = val
 
-    # Drop student_id if present
-    if 'student_id' in payload:
-        payload.pop('student_id')
+    # -----------------------
+    # Deterministic probability calculation
+    # -----------------------
+    # Base score from main numeric features
+    score = 0.4 * payload.get('internal_marks', 0) + 0.3 * payload.get('attendance_pct', 0) + 0.2 * payload.get('assignments_submitted_pct', 0)
 
-    # -------- Prediction --------
-    df = pd.DataFrame([payload])
-    proba = model.predict_proba(df)[:, 1] if hasattr(model, 'predict_proba') else model.predict(df)
-    pred_label = model.predict(df)
+    # Previous grade weight
+    grade_weights = {'A': 10, 'B': 5, 'C': 0, 'D': -5, 'F': -10}
+    # grade_weights = {'A': 10, 'B': 0, 'C': -5, 'D': -10, 'F': -15}
+    prev_grade = str(payload.get('previous_grade', 'C')).upper().strip()
+    score += grade_weights.get(prev_grade, 0)
 
-    # -------- Generate remarks --------
-    remarks = []
-    if 'attendance_pct' in payload and payload['attendance_pct'] < 75:
+    # Small weight for extracurricular involvement (inverse effect)
+    exc_weights = {'High': -5, 'Medium': -2, 'Low': 0, 'None': 2}
+    exc_level = str(payload.get('extracurricular', 'Low')).capitalize()
+    score += exc_weights.get(exc_level, 0)
+
+    # Normalize to 0–1
+    proba = 1 / (1 + np.exp(-(score - 60)/10.0))
+
+    # -----------------------
+    # Remarks
+    # -----------------------
+    if payload.get('attendance_pct', 100) < 75:
         remarks.append("Low attendance may affect performance")
-    if 'internal_marks' in payload and payload['internal_marks'] < 50:
-        remarks.append("Internal marks are low")
-    if 'assignments_submitted_pct' in payload and payload['assignments_submitted_pct'] < 70:
+    if payload.get('assignments_submitted_pct', 100) < 70:
         remarks.append("Assignments submission is low")
-    if 'age' in payload and payload['age'] < 10:
-        remarks.append("Age is very low, may need review")
-    
+    if payload.get('internal_marks', 100) < 50:
+        remarks.append("Internal marks are low")
+    if prev_grade in ['D','F']:
+        remarks.append("Previous grade is low")
+    if payload.get('age', 18) < 6:
+        remarks.append("Very young student")
+    if exc_level in ['Medium', 'High']:
+        remarks.append(f"Good extracurricular involvement ({exc_level})")
+
+    # If no remarks, default to "No issues"
     if not remarks:
-        remarks.append("Good standing")
+        remarks = ["No issues"]
+
+    # Prediction threshold 0.5
+    prediction = 1 if proba >= 0.5 else 0
 
     return {
-        'prediction': int(pred_label[0]),
-        'probability': float(proba[0]),
-        'remarks': "; ".join(remarks)
+        'prediction': prediction,
+        'probability': round(proba * 100, 2),
+        'remarks': remarks
     }
+
 
 
 
@@ -378,6 +661,29 @@ def run_flask(model_path, host='0.0.0.0', port=5000):
     app = Flask(__name__)
 
     # Route to download CSV
+
+    @app.route('/predict_simple', methods=['GET', 'POST'])
+    def predict_simple_route():
+        if request.method == 'GET':
+            return render_template('predict_simple.html')  # your HTML file
+        else:
+            try:
+                payload = request.get_json()
+                if isinstance(payload, list):
+                    results = []
+                    for p in payload:
+                        res = predict_single_simple(artifact, p)
+                        results.append(res)
+                    return jsonify({'predictions': results})
+                else:
+                    res = predict_single_simple(artifact, payload)
+                    return jsonify(res)
+            except Exception as e:
+                return jsonify({'error': str(e)}), 400
+
+
+
+
     @app.route('/download_csv')
     def download_csv():
         csv_string = request.args.get('csv')
